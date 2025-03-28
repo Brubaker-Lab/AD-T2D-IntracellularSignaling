@@ -1,0 +1,2014 @@
+---
+title: "T2D & AD Intracellular Signaling Analysis"
+author: "Brendan K. Ball"
+date: "2025-03-27"
+output: html_document
+---
+
+## 0. PACKAGE DOWNLOAD
+The following packages were used for the RStudio software version 2023.
+```{r Library Packages Installation, warning=FALSE}
+# Downloads and calls from the library the necessary packages needed to run the code
+if(!require(stringr)) install.packages("stringr", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (stringr, verbose = FALSE))
+if(!require(gtools)) install.packages("gtools", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (gtools, verbose = FALSE))
+if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (dplyr, verbose = FALSE))
+if(!require(factoextra)) install.packages("factoextra", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (factoextra, verbose = FALSE))
+if(!require(devtools)) install.packages("devtools", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (devtools, verbose = FALSE))
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (data.table, verbose = FALSE))
+if(!require(effects)) install.packages("effects", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (effects, verbose = FALSE))
+if(!require(pheatmap)) install.packages("pheatmap", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (pheatmap, verbose = FALSE))
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (tidyverse, verbose = FALSE))
+if(!require(purrr)) install.packages("purrr", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (purrr, verbose = FALSE))
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+if (!require("mixOmics")) {BiocManager::install("mixOmics")}
+suppressWarnings(library (mixOmics, verbose = FALSE))
+if(!require(CCA)) install.packages("CCA", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (CCA, verbose = FALSE))
+if(!require(ggrepel)) install.packages("ggrepel", repos = "http://cran.us.r-project.org")
+suppressWarnings(library (ggrepel, verbose = FALSE))
+```
+
+## 1. DATA PREPARATION FOR ANALYSIS
+### 1.1. Data Processing for Multi-Pathway Data (Batch 1)
+```{r Import of Results and Prepare Data, warning=FALSE}
+# Download the MAPK-SAPK data front the 384-well plate
+Multi_dat <- read.csv("Multipathway_Luminex3.csv")
+# Remove the first column and last column
+Multi_dat <- Multi_dat[-c(1)]
+Multi_dat <- Multi_dat[-c(11)]
+# Save the standards in separate dataframe, then remove 
+Multi_dat_standards <- Multi_dat[c(1:15),]
+
+Multi_dat <- Multi_dat[-c(1:15),]
+# Reset the row number names
+rownames(Multi_dat) <- NULL
+# Remove the numbers after the metabolites to cluster easier by name
+Multi_dat[1:162,1] <- gsub("1|2|3", "", as.character(Multi_dat[1:162,1]))
+# For loop to make all columns within the Multi_dat data frame numeric, except for the first column
+for (i in 2:ncol(Multi_dat)) {
+  Multi_dat[,i] <- as.numeric(Multi_dat[,i])
+}
+# For loop to make all columns within the Multi_dat_standards data frame numeric, except for the first column
+for (i in 2:ncol(Multi_dat_standards)) {
+  Multi_dat_standards[,i] <- as.numeric(Multi_dat_standards[,i])
+}
+```
+
+```{r Log2 Normalization with the Mean Values}
+# Renaming the metabolites to the full name
+Multi_dat[c(1:9),1] <- "Lauric Acid"
+Multi_dat[c(10:18),1] <- "Lauric Acid (V)"
+Multi_dat[c(19:27),1] <- "Arachidonic Acid"
+Multi_dat[c(28:36),1] <- "Arachidonic Acid (V)"
+Multi_dat[c(37:45),1] <- "Fructose"
+Multi_dat[c(46:54),1] <- "Fructose (V)"
+Multi_dat[c(55:63),1] <- "Retinol"
+Multi_dat[c(64:72),1] <- "Retinol (V)"
+Multi_dat[c(73:81),1] <- "Niacinamide"
+Multi_dat[c(82:90),1] <- "Niacinamide (V)"
+Multi_dat[c(91:99),1] <- "L-Tryptophan"
+Multi_dat[c(100:108),1] <- "L-Tryptophan (V)"
+Multi_dat[c(109:117),1] <- "Asparagine"
+Multi_dat[c(118:126),1] <- "Asparagine (V)"
+Multi_dat[c(127:135),1] <- "Aminoadipic Acid"
+Multi_dat[c(136:144),1] <- "Aminoadipic Acid (V)"
+Multi_dat[c(145:153),1] <- "D-Sorbitol"
+Multi_dat[c(154:162),1] <- "D-Sorbitol (V)"
+
+# Taking the mean for each separate metabolite
+# Take the vehicles separately in a new data frame for data analysis
+Multi_dat_veh <- Multi_dat[grepl("(V)", Multi_dat$Sample),] #Vehicles only
+
+# Combine the similar sample names (group_by) then take the average for each metabolite group
+## CREB
+Multi_dat_veh_avg_CREB <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(CREB = mean(`CREB`))
+Multi_dat_veh_avg_CREB <- as.data.frame(Multi_dat_veh_avg_CREB)
+## JNK
+Multi_dat_veh_avg_JNK <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(JNK = mean(`JNK`))
+Multi_dat_veh_avg_JNK <- as.data.frame(Multi_dat_veh_avg_JNK)
+## NFkB
+Multi_dat_veh_avg_NFkB <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(NFkB = mean(`NFkB`))
+Multi_dat_veh_avg_NFkB <- as.data.frame(Multi_dat_veh_avg_NFkB)
+## p38
+Multi_dat_veh_avg_p38 <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(p38 = mean(`p38`))
+Multi_dat_veh_avg_p38 <- as.data.frame(Multi_dat_veh_avg_p38)
+## ERK12
+Multi_dat_veh_avg_ERK12 <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(ERK12 = mean(`ERK12`))
+Multi_dat_veh_avg_ERK12 <- as.data.frame(Multi_dat_veh_avg_ERK12)
+## Akt
+Multi_dat_veh_avg_Akt <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(Akt = mean(`Akt`))
+Multi_dat_veh_avg_Akt <- as.data.frame(Multi_dat_veh_avg_Akt)
+## p70S6K
+Multi_dat_veh_avg_p70S6K <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(p70S6K = mean(`p70S6K`))
+Multi_dat_veh_avg_p70S6K <- as.data.frame(Multi_dat_veh_avg_p70S6K)
+## STAT3
+Multi_dat_veh_avg_STAT3 <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(STAT3 = mean(`STAT3`))
+Multi_dat_veh_avg_STAT3 <- as.data.frame(Multi_dat_veh_avg_STAT3)
+## STAT5
+Multi_dat_veh_avg_STAT5 <- Multi_dat_veh  %>% group_by(Sample) %>% summarize(STAT5 = mean(`STAT5`))
+Multi_dat_veh_avg_STAT5 <- as.data.frame(Multi_dat_veh_avg_STAT5)
+
+# Merge the data sets into a list
+Multi_avg_list <- list(Multi_dat_veh_avg_CREB,
+                    Multi_dat_veh_avg_JNK,
+                    Multi_dat_veh_avg_NFkB,
+                    Multi_dat_veh_avg_p38,
+                    Multi_dat_veh_avg_ERK12,
+                    Multi_dat_veh_avg_Akt,
+                    Multi_dat_veh_avg_p70S6K,
+                    Multi_dat_veh_avg_STAT3,
+                    Multi_dat_veh_avg_STAT5)
+  
+# Combine the data frames together using the list
+Multi_avg_all <- Reduce(function(x, y) merge(x, y, all=TRUE), Multi_avg_list)
+Multi_dat_met <- Multi_dat[!grepl("(V)", Multi_dat$Sample),]
+
+# Reset the row numbers name
+rownames(Multi_dat_met) <- NULL
+# Rename each description to have the replicate number included
+Multi_dat_met[1,1] <- "Lauric Acid (1)"
+Multi_dat_met[2,1] <- "Lauric Acid (1)"
+Multi_dat_met[3,1] <- "Lauric Acid (1)"
+Multi_dat_met[4,1] <- "Lauric Acid (2)"
+Multi_dat_met[5,1] <- "Lauric Acid (2)"
+Multi_dat_met[6,1] <- "Lauric Acid (2)"
+Multi_dat_met[7,1] <- "Lauric Acid (3)"
+Multi_dat_met[8,1] <- "Lauric Acid (3)"
+Multi_dat_met[9,1] <- "Lauric Acid (3)"
+Multi_dat_met[10,1] <- "Arachidonic Acid (1)"
+Multi_dat_met[11,1] <- "Arachidonic Acid (1)"
+Multi_dat_met[12,1] <- "Arachidonic Acid (1)"
+Multi_dat_met[13,1] <- "Arachidonic Acid (2)"
+Multi_dat_met[14,1] <- "Arachidonic Acid (2)"
+Multi_dat_met[15,1] <- "Arachidonic Acid (2)"
+Multi_dat_met[16,1] <- "Arachidonic Acid (3)"
+Multi_dat_met[17,1] <- "Arachidonic Acid (3)"
+Multi_dat_met[18,1] <- "Arachidonic Acid (3)"
+Multi_dat_met[19,1] <- "Fructose (1)"
+Multi_dat_met[20,1] <- "Fructose (1)"
+Multi_dat_met[21,1] <- "Fructose (1)"
+Multi_dat_met[22,1] <- "Fructose (2)"
+Multi_dat_met[23,1] <- "Fructose (2)"
+Multi_dat_met[24,1] <- "Fructose (2)"
+Multi_dat_met[25,1] <- "Fructose (3)"
+Multi_dat_met[26,1] <- "Fructose (3)"
+Multi_dat_met[27,1] <- "Fructose (3)"
+Multi_dat_met[28,1] <- "Retinol (1)"
+Multi_dat_met[29,1] <- "Retinol (1)"
+Multi_dat_met[30,1] <- "Retinol (1)"
+Multi_dat_met[31,1] <- "Retinol (2)"
+Multi_dat_met[32,1] <- "Retinol (2)"
+Multi_dat_met[33,1] <- "Retinol (2)"
+Multi_dat_met[34,1] <- "Retinol (3)"
+Multi_dat_met[35,1] <- "Retinol (3)"
+Multi_dat_met[36,1] <- "Retinol (3)"
+Multi_dat_met[37,1] <- "Niacinamide (1)"
+Multi_dat_met[38,1] <- "Niacinamide (1)"
+Multi_dat_met[39,1] <- "Niacinamide (1)"
+Multi_dat_met[40,1] <- "Niacinamide (2)"
+Multi_dat_met[41,1] <- "Niacinamide (2)"
+Multi_dat_met[42,1] <- "Niacinamide (2)"
+Multi_dat_met[43,1] <- "Niacinamide (3)"
+Multi_dat_met[44,1] <- "Niacinamide (3)"
+Multi_dat_met[45,1] <- "Niacinamide (3)"
+Multi_dat_met[46,1] <- "L-Tryptophan (1)"
+Multi_dat_met[47,1] <- "L-Tryptophan (1)"
+Multi_dat_met[48,1] <- "L-Tryptophan (1)"
+Multi_dat_met[49,1] <- "L-Tryptophan (2)"
+Multi_dat_met[50,1] <- "L-Tryptophan (2)"
+Multi_dat_met[51,1] <- "L-Tryptophan (2)"
+Multi_dat_met[52,1] <- "L-Tryptophan (3)"
+Multi_dat_met[53,1] <- "L-Tryptophan (3)"
+Multi_dat_met[54,1] <- "L-Tryptophan (3)"
+Multi_dat_met[55,1] <- "Asparagine (1)"
+Multi_dat_met[56,1] <- "Asparagine (1)"
+Multi_dat_met[57,1] <- "Asparagine (1)"
+Multi_dat_met[58,1] <- "Asparagine (2)"
+Multi_dat_met[59,1] <- "Asparagine (2)"
+Multi_dat_met[60,1] <- "Asparagine (2)"
+Multi_dat_met[61,1] <- "Asparagine (3)"
+Multi_dat_met[62,1] <- "Asparagine (3)"
+Multi_dat_met[63,1] <- "Asparagine (3)"
+Multi_dat_met[64,1] <- "Aminoadipic Acid (1)"
+Multi_dat_met[65,1] <- "Aminoadipic Acid (1)"
+Multi_dat_met[66,1] <- "Aminoadipic Acid (1)"
+Multi_dat_met[67,1] <- "Aminoadipic Acid (2)"
+Multi_dat_met[68,1] <- "Aminoadipic Acid (2)"
+Multi_dat_met[69,1] <- "Aminoadipic Acid (2)"
+Multi_dat_met[70,1] <- "Aminoadipic Acid (3)"
+Multi_dat_met[71,1] <- "Aminoadipic Acid (3)"
+Multi_dat_met[72,1] <- "Aminoadipic Acid (3)"
+Multi_dat_met[73,1] <- "D-Sorbitol (1)"
+Multi_dat_met[74,1] <- "D-Sorbitol (1)"
+Multi_dat_met[75,1] <- "D-Sorbitol (1)"
+Multi_dat_met[76,1] <- "D-Sorbitol (2)"
+Multi_dat_met[77,1] <- "D-Sorbitol (2)"
+Multi_dat_met[78,1] <- "D-Sorbitol (2)"
+Multi_dat_met[79,1] <- "D-Sorbitol (3)"
+Multi_dat_met[80,1] <- "D-Sorbitol (3)"
+Multi_dat_met[81,1] <- "D-Sorbitol (3)"
+
+# Create a data frame with the computations for averaged vehicles
+Multi_dat_avg <- Multi_dat_met
+# Match alphabetical order similar to the structure of the vehicles data 
+Multi_dat_avg <- Multi_dat_avg %>% arrange(Sample)
+# Combine rows by Sample and average the values
+Multi_dat_avg <- Multi_dat_avg %>%
+  group_by(Sample) %>% # Group by the 'Sample' column
+  summarise(across(everything(), mean, na.rm = TRUE))
+
+## Take the log2(Metabolite/Vehicle) Calculation for each replicate
+# For Aminoadipic Acid replicates 1-9
+Multi_dat_avg[1,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[1,2:ncol(Multi_dat_avg)]/Multi_avg_all[1,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[2,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[2,2:ncol(Multi_dat_avg)]/Multi_avg_all[1,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[3,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[3,2:ncol(Multi_dat_avg)]/Multi_avg_all[1,2:ncol(Multi_dat_avg)])
+# For Arachidonic Acid replicates 1-9
+Multi_dat_avg[4,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[4,2:ncol(Multi_dat_avg)]/Multi_avg_all[2,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[5,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[5,2:ncol(Multi_dat_avg)]/Multi_avg_all[2,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[6,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[6,2:ncol(Multi_dat_avg)]/Multi_avg_all[2,2:ncol(Multi_dat_avg)])
+# For Asparagine replicates 1-9
+Multi_dat_avg[7,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[7,2:ncol(Multi_dat_avg)]/Multi_avg_all[3,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[8,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[8,2:ncol(Multi_dat_avg)]/Multi_avg_all[3,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[9,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[9,2:ncol(Multi_dat_avg)]/Multi_avg_all[3,2:ncol(Multi_dat_avg)])
+# For D-Sorbitol replicates
+Multi_dat_avg[10,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[10,2:ncol(Multi_dat_avg)]/Multi_avg_all[4,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[11,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[11,2:ncol(Multi_dat_avg)]/Multi_avg_all[4,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[12,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[12,2:ncol(Multi_dat_avg)]/Multi_avg_all[4,2:ncol(Multi_dat_avg)])
+# For Fructose replicates
+Multi_dat_avg[13,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[13,2:ncol(Multi_dat_avg)]/Multi_avg_all[5,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[14,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[14,2:ncol(Multi_dat_avg)]/Multi_avg_all[5,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[15,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[15,2:ncol(Multi_dat_avg)]/Multi_avg_all[5,2:ncol(Multi_dat_avg)])
+# For L-Tryptophan replicates
+Multi_dat_avg[16,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[16,2:ncol(Multi_dat_avg)]/Multi_avg_all[6,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[17,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[17,2:ncol(Multi_dat_avg)]/Multi_avg_all[6,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[18,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[18,2:ncol(Multi_dat_avg)]/Multi_avg_all[6,2:ncol(Multi_dat_avg)])
+# For Lauric Acid replicates
+Multi_dat_avg[19,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[19,2:ncol(Multi_dat_avg)]/Multi_avg_all[7,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[20,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[20,2:ncol(Multi_dat_avg)]/Multi_avg_all[7,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[21,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[21,2:ncol(Multi_dat_avg)]/Multi_avg_all[7,2:ncol(Multi_dat_avg)])
+# For Niacinamide replicates
+Multi_dat_avg[22,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[22,2:ncol(Multi_dat_avg)]/Multi_avg_all[8,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[23,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[23,2:ncol(Multi_dat_avg)]/Multi_avg_all[8,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[24,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[24,2:ncol(Multi_dat_avg)]/Multi_avg_all[8,2:ncol(Multi_dat_avg)])
+# For Retinol replicates
+Multi_dat_avg[25,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[25,2:ncol(Multi_dat_avg)]/Multi_avg_all[9,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[26,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[26,2:ncol(Multi_dat_avg)]/Multi_avg_all[9,2:ncol(Multi_dat_avg)])
+Multi_dat_avg[27,2:ncol(Multi_dat_avg)] <- log2(Multi_dat_avg[27,2:ncol(Multi_dat_avg)]/Multi_avg_all[9,2:ncol(Multi_dat_avg)])
+```
+
+### 1.2. Data Processing for MAPKSAPK Data (Batch 2)
+```{r Import of Results and Prepare Data, warning=FALSE}
+# Download the MAPK-SAPK data front the 384-well plate
+MAPKSAPK_dat <- read.csv("MAPK-SAPK_Luminex2.csv")
+# Remove the first column and last column
+MAPKSAPK_dat <- MAPKSAPK_dat[-c(1)]
+MAPKSAPK_dat <- MAPKSAPK_dat[-c(12)]
+# Save the standards in separate dataframe, then remove 
+MAPKSAPK_dat_standards <- MAPKSAPK_dat[c(1:15),]
+
+MAPKSAPK_dat <- MAPKSAPK_dat[-c(1:15),]
+# Reset the row number names
+rownames(MAPKSAPK_dat) <- NULL
+# Remove the numbers after the metabolites to cluster easier by name
+MAPKSAPK_dat[1:162,1] <- gsub("1|2|3", "", as.character(MAPKSAPK_dat[1:162,1]))
+# For loop to make all columns within the MAPKSAPK_dat data frame numeric, except for the first column
+for (i in 2:ncol(MAPKSAPK_dat)) {
+  MAPKSAPK_dat[,i] <- as.numeric(MAPKSAPK_dat[,i])
+}
+# For loop to make all columns within the MAPKSAPK_dat_standards data frame numeric, except for the first column
+for (i in 2:ncol(MAPKSAPK_dat_standards)) {
+  MAPKSAPK_dat_standards[,i] <- as.numeric(MAPKSAPK_dat_standards[,i])
+}
+```
+
+```{r Log2 Normalization with the Mean Values}
+# Renaming the metabolites to the full name
+MAPKSAPK_dat[c(1:9),1] <- "Lauric Acid"
+MAPKSAPK_dat[c(10:18),1] <- "Lauric Acid (V)"
+MAPKSAPK_dat[c(19:27),1] <- "Arachidonic Acid"
+MAPKSAPK_dat[c(28:36),1] <- "Arachidonic Acid (V)"
+MAPKSAPK_dat[c(37:45),1] <- "Fructose"
+MAPKSAPK_dat[c(46:54),1] <- "Fructose (V)"
+MAPKSAPK_dat[c(55:63),1] <- "Retinol"
+MAPKSAPK_dat[c(64:72),1] <- "Retinol (V)"
+MAPKSAPK_dat[c(73:81),1] <- "Niacinamide"
+MAPKSAPK_dat[c(82:90),1] <- "Niacinamide (V)"
+MAPKSAPK_dat[c(91:99),1] <- "L-Tryptophan"
+MAPKSAPK_dat[c(100:108),1] <- "L-Tryptophan (V)"
+MAPKSAPK_dat[c(109:117),1] <- "Asparagine"
+MAPKSAPK_dat[c(118:126),1] <- "Asparagine (V)"
+MAPKSAPK_dat[c(127:135),1] <- "Aminoadipic Acid"
+MAPKSAPK_dat[c(136:144),1] <- "Aminoadipic Acid (V)"
+MAPKSAPK_dat[c(145:153),1] <- "D-Sorbitol"
+MAPKSAPK_dat[c(154:162),1] <- "D-Sorbitol (V)"
+
+# Taking the mean for each separate metabolite
+# Take the vehicles separately in a new data frame for data analysis
+MAPKSAPK_dat_veh <- MAPKSAPK_dat[grepl("(V)", MAPKSAPK_dat$Sample),] #Vehicles only
+
+# Combine the similar sample names (group_by) then take the average for each metabolite
+## ATF2
+MAPKSAPK_dat_veh_avg_ATF2 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(ATF2 = mean(`ATF2`))
+MAPKSAPK_dat_veh_avg_ATF2 <- as.data.frame(MAPKSAPK_dat_veh_avg_ATF2)
+## JNK
+MAPKSAPK_dat_veh_avg_JNK <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(JNK = mean(`JNK`))
+MAPKSAPK_dat_veh_avg_JNK <- as.data.frame(MAPKSAPK_dat_veh_avg_JNK)
+## HSP27
+MAPKSAPK_dat_veh_avg_HSP27 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(HSP27 = mean(`HSP27`))
+MAPKSAPK_dat_veh_avg_HSP27 <- as.data.frame(MAPKSAPK_dat_veh_avg_HSP27)
+## P38
+MAPKSAPK_dat_veh_avg_P38 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(P38 = mean(`P38`))
+MAPKSAPK_dat_veh_avg_P38 <- as.data.frame(MAPKSAPK_dat_veh_avg_P38)
+## Erk.MAP.Kinase.1.2
+MAPKSAPK_dat_veh_avg_Erk.MAP.Kinase.1.2 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(Erk.MAP.Kinase.1.2 = mean(`Erk.MAP.Kinase.1.2`))
+MAPKSAPK_dat_veh_avg_Erk.MAP.Kinase.1.2 <- as.data.frame(MAPKSAPK_dat_veh_avg_Erk.MAP.Kinase.1.2)
+## p53
+MAPKSAPK_dat_veh_avg_p53 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(p53 = mean(`p53`))
+MAPKSAPK_dat_veh_avg_p53 <- as.data.frame(MAPKSAPK_dat_veh_avg_p53)
+## MEK1
+MAPKSAPK_dat_veh_avg_MEK1 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(MEK1 = mean(`MEK1`))
+MAPKSAPK_dat_veh_avg_MEK1 <- as.data.frame(MAPKSAPK_dat_veh_avg_MEK1)
+## MSK1
+MAPKSAPK_dat_veh_avg_MSK1 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(MSK1 = mean(`MSK1`))
+MAPKSAPK_dat_veh_avg_MSK1 <- as.data.frame(MAPKSAPK_dat_veh_avg_MSK1)
+## STAT1
+MAPKSAPK_dat_veh_avg_STAT1 <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(STAT1 = mean(`STAT1`))
+MAPKSAPK_dat_veh_avg_STAT1 <- as.data.frame(MAPKSAPK_dat_veh_avg_STAT1)
+## c.Jun
+MAPKSAPK_dat_veh_avg_c.Jun <- MAPKSAPK_dat_veh  %>% group_by(Sample) %>% summarize(c.Jun = mean(`c.Jun`))
+MAPKSAPK_dat_veh_avg_c.Jun <- as.data.frame(MAPKSAPK_dat_veh_avg_c.Jun)
+
+# Merge the data sets into a list
+MAPKSAPK_avg_list <- list(MAPKSAPK_dat_veh_avg_ATF2,
+                    MAPKSAPK_dat_veh_avg_JNK,
+                    MAPKSAPK_dat_veh_avg_HSP27,
+                    MAPKSAPK_dat_veh_avg_P38,
+                    MAPKSAPK_dat_veh_avg_Erk.MAP.Kinase.1.2,
+                    MAPKSAPK_dat_veh_avg_p53,
+                    MAPKSAPK_dat_veh_avg_MEK1,
+                    MAPKSAPK_dat_veh_avg_MSK1,
+                    MAPKSAPK_dat_veh_avg_STAT1,
+                    MAPKSAPK_dat_veh_avg_c.Jun)
+  
+# Combine the data frames together using the list
+MAPKSAPK_avg_all <- Reduce(function(x, y) merge(x, y, all=TRUE), MAPKSAPK_avg_list)
+
+MAPKSAPK_dat_met <- MAPKSAPK_dat[!grepl("(V)", MAPKSAPK_dat$Sample),] #Metabolites only
+# Reset the row numbers name
+rownames(MAPKSAPK_dat_met) <- NULL
+# Rename each description to have the replicate number included
+MAPKSAPK_dat_met[1,1] <- "Lauric Acid (1)"
+MAPKSAPK_dat_met[2,1] <- "Lauric Acid (1)"
+MAPKSAPK_dat_met[3,1] <- "Lauric Acid (1)"
+MAPKSAPK_dat_met[4,1] <- "Lauric Acid (2)"
+MAPKSAPK_dat_met[5,1] <- "Lauric Acid (2)"
+MAPKSAPK_dat_met[6,1] <- "Lauric Acid (2)"
+MAPKSAPK_dat_met[7,1] <- "Lauric Acid (3)"
+MAPKSAPK_dat_met[8,1] <- "Lauric Acid (3)"
+MAPKSAPK_dat_met[9,1] <- "Lauric Acid (3)"
+MAPKSAPK_dat_met[10,1] <- "Arachidonic Acid (1)"
+MAPKSAPK_dat_met[11,1] <- "Arachidonic Acid (1)"
+MAPKSAPK_dat_met[12,1] <- "Arachidonic Acid (1)"
+MAPKSAPK_dat_met[13,1] <- "Arachidonic Acid (2)"
+MAPKSAPK_dat_met[14,1] <- "Arachidonic Acid (2)"
+MAPKSAPK_dat_met[15,1] <- "Arachidonic Acid (2)"
+MAPKSAPK_dat_met[16,1] <- "Arachidonic Acid (3)"
+MAPKSAPK_dat_met[17,1] <- "Arachidonic Acid (3)"
+MAPKSAPK_dat_met[18,1] <- "Arachidonic Acid (3)"
+MAPKSAPK_dat_met[19,1] <- "Fructose (1)"
+MAPKSAPK_dat_met[20,1] <- "Fructose (1)"
+MAPKSAPK_dat_met[21,1] <- "Fructose (1)"
+MAPKSAPK_dat_met[22,1] <- "Fructose (2)"
+MAPKSAPK_dat_met[23,1] <- "Fructose (2)"
+MAPKSAPK_dat_met[24,1] <- "Fructose (2)"
+MAPKSAPK_dat_met[25,1] <- "Fructose (3)"
+MAPKSAPK_dat_met[26,1] <- "Fructose (3)"
+MAPKSAPK_dat_met[27,1] <- "Fructose (3)"
+MAPKSAPK_dat_met[28,1] <- "Retinol (1)"
+MAPKSAPK_dat_met[29,1] <- "Retinol (1)"
+MAPKSAPK_dat_met[30,1] <- "Retinol (1)"
+MAPKSAPK_dat_met[31,1] <- "Retinol (2)"
+MAPKSAPK_dat_met[32,1] <- "Retinol (2)"
+MAPKSAPK_dat_met[33,1] <- "Retinol (2)"
+MAPKSAPK_dat_met[34,1] <- "Retinol (3)"
+MAPKSAPK_dat_met[35,1] <- "Retinol (3)"
+MAPKSAPK_dat_met[36,1] <- "Retinol (3)"
+MAPKSAPK_dat_met[37,1] <- "Niacinamide (1)"
+MAPKSAPK_dat_met[38,1] <- "Niacinamide (1)"
+MAPKSAPK_dat_met[39,1] <- "Niacinamide (1)"
+MAPKSAPK_dat_met[40,1] <- "Niacinamide (2)"
+MAPKSAPK_dat_met[41,1] <- "Niacinamide (2)"
+MAPKSAPK_dat_met[42,1] <- "Niacinamide (2)"
+MAPKSAPK_dat_met[43,1] <- "Niacinamide (3)"
+MAPKSAPK_dat_met[44,1] <- "Niacinamide (3)"
+MAPKSAPK_dat_met[45,1] <- "Niacinamide (3)"
+MAPKSAPK_dat_met[46,1] <- "L-Tryptophan (1)"
+MAPKSAPK_dat_met[47,1] <- "L-Tryptophan (1)"
+MAPKSAPK_dat_met[48,1] <- "L-Tryptophan (1)"
+MAPKSAPK_dat_met[49,1] <- "L-Tryptophan (2)"
+MAPKSAPK_dat_met[50,1] <- "L-Tryptophan (2)"
+MAPKSAPK_dat_met[51,1] <- "L-Tryptophan (2)"
+MAPKSAPK_dat_met[52,1] <- "L-Tryptophan (3)"
+MAPKSAPK_dat_met[53,1] <- "L-Tryptophan (3)"
+MAPKSAPK_dat_met[54,1] <- "L-Tryptophan (3)"
+MAPKSAPK_dat_met[55,1] <- "Asparagine (1)"
+MAPKSAPK_dat_met[56,1] <- "Asparagine (1)"
+MAPKSAPK_dat_met[57,1] <- "Asparagine (1)"
+MAPKSAPK_dat_met[58,1] <- "Asparagine (2)"
+MAPKSAPK_dat_met[59,1] <- "Asparagine (2)"
+MAPKSAPK_dat_met[60,1] <- "Asparagine (2)"
+MAPKSAPK_dat_met[61,1] <- "Asparagine (3)"
+MAPKSAPK_dat_met[62,1] <- "Asparagine (3)"
+MAPKSAPK_dat_met[63,1] <- "Asparagine (3)"
+MAPKSAPK_dat_met[64,1] <- "Aminoadipic Acid (1)"
+MAPKSAPK_dat_met[65,1] <- "Aminoadipic Acid (1)"
+MAPKSAPK_dat_met[66,1] <- "Aminoadipic Acid (1)"
+MAPKSAPK_dat_met[67,1] <- "Aminoadipic Acid (2)"
+MAPKSAPK_dat_met[68,1] <- "Aminoadipic Acid (2)"
+MAPKSAPK_dat_met[69,1] <- "Aminoadipic Acid (2)"
+MAPKSAPK_dat_met[70,1] <- "Aminoadipic Acid (3)"
+MAPKSAPK_dat_met[71,1] <- "Aminoadipic Acid (3)"
+MAPKSAPK_dat_met[72,1] <- "Aminoadipic Acid (3)"
+MAPKSAPK_dat_met[73,1] <- "D-Sorbitol (1)"
+MAPKSAPK_dat_met[74,1] <- "D-Sorbitol (1)"
+MAPKSAPK_dat_met[75,1] <- "D-Sorbitol (1)"
+MAPKSAPK_dat_met[76,1] <- "D-Sorbitol (2)"
+MAPKSAPK_dat_met[77,1] <- "D-Sorbitol (2)"
+MAPKSAPK_dat_met[78,1] <- "D-Sorbitol (2)"
+MAPKSAPK_dat_met[79,1] <- "D-Sorbitol (3)"
+MAPKSAPK_dat_met[80,1] <- "D-Sorbitol (3)"
+MAPKSAPK_dat_met[81,1] <- "D-Sorbitol (3)"
+
+# Create a data frame with the computations for averaged vehicles
+MAPKSAPK_dat_avg <- MAPKSAPK_dat_met
+# Match alphabetical order similar to the structure of the vehicles data 
+MAPKSAPK_dat_avg <- MAPKSAPK_dat_avg %>% arrange(Sample)
+# Combine rows by Sample and average the values
+MAPKSAPK_dat_avg <- MAPKSAPK_dat_avg %>%
+  group_by(Sample) %>% # Group by the 'Sample' column
+  summarise(across(everything(), mean, na.rm = TRUE))
+
+## Take the log2(Metabolite/Vehicle) Calculation for each replicate
+# For Aminoadipic Acid replicates
+MAPKSAPK_dat_avg[1,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[1,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[1,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[2,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[2,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[1,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[3,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[3,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[1,2:ncol(MAPKSAPK_dat_avg)])
+# For Arachidonic Acid replicates
+MAPKSAPK_dat_avg[4,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[4,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[2,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[5,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[5,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[2,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[6,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[6,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[2,2:ncol(MAPKSAPK_dat_avg)])
+# For Asparagine replicates
+MAPKSAPK_dat_avg[7,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[7,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[3,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[8,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[8,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[3,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[9,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[9,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[3,2:ncol(MAPKSAPK_dat_avg)])
+# For D-Sorbitol replicates
+MAPKSAPK_dat_avg[10,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[10,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[4,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[11,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[11,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[4,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[12,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[12,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[4,2:ncol(MAPKSAPK_dat_avg)])
+# For Fructose replicates
+MAPKSAPK_dat_avg[13,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[13,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[5,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[14,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[14,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[5,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[15,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[15,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[5,2:ncol(MAPKSAPK_dat_avg)])
+# For L-Tryptophan replicates
+MAPKSAPK_dat_avg[16,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[16,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[6,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[17,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[17,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[6,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[18,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[18,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[6,2:ncol(MAPKSAPK_dat_avg)])
+# For Lauric Acid replicates
+MAPKSAPK_dat_avg[19,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[19,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[7,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[20,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[20,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[7,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[21,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[21,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[7,2:ncol(MAPKSAPK_dat_avg)])
+# For Niacinamide replicates
+MAPKSAPK_dat_avg[22,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[22,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[8,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[23,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[23,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[8,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[24,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[24,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[8,2:ncol(MAPKSAPK_dat_avg)])
+# For Retinol replicates
+MAPKSAPK_dat_avg[25,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[25,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[9,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[26,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[26,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[9,2:ncol(MAPKSAPK_dat_avg)])
+MAPKSAPK_dat_avg[27,2:ncol(MAPKSAPK_dat_avg)] <- log2(MAPKSAPK_dat_avg[27,2:ncol(MAPKSAPK_dat_avg)]/MAPKSAPK_avg_all[9,2:ncol(MAPKSAPK_dat_avg)])
+```
+
+## 1.3. Batch Effect Verification
+```{r Data Pre-processing}
+# Add _1 to column names to distinguish the pathways
+colnames(Multi_dat_avg)[2:ncol(Multi_dat_avg)] <- paste0(colnames(Multi_dat_avg)[2:ncol(Multi_dat_avg)], "_1")
+# Add _2 to column names to distinguish the pathways
+colnames(MAPKSAPK_dat_avg)[2:ncol(MAPKSAPK_dat_avg)] <- paste0(colnames(MAPKSAPK_dat_avg)[2:ncol(MAPKSAPK_dat_avg)], "_2")
+# Merge the two batches together
+pathway_dat <- merge(Multi_dat_avg, MAPKSAPK_dat_avg, by = "Sample", all = TRUE)
+pathway_dat_pca <- column_to_rownames(pathway_dat, var="Sample")
+pathway_dat_pca <- t(pathway_dat_pca)
+# Add batch as a new column to the matrix
+batch_labels <- ifelse(grepl("_1", rownames(pathway_dat_pca)), "Batch 1", 
+                       ifelse(grepl("_2", rownames(pathway_dat_pca)), "Batch 2", "Unknown"))
+# Convert to a dataframe 
+pathway_dat_pca_label <- data.frame(pathway_dat_pca, Batch = batch_labels)
+```
+
+Principal component analysis was done to verify for batch effects prior to averaging the data together
+
+```{r Principal Component Analysis }
+# Prepare the principal components
+pathway_dat_pr <- prcomp(pathway_dat_pca_label[c(1:27)], center = TRUE, scale = FALSE)
+
+#svg('PCA_batcheffect.svg', width = 4, height = 4)
+# Create PCA chart with coloring/grouping based on different rat groups
+g1 <- fviz_pca_ind(pathway_dat_pr, 
+                   label="none", 
+                   alpha.ind=1, 
+                   pointshape=19, 
+                   habillage=pathway_dat_pca_label$Batch, 
+                   pointsize = 2, 
+                   repel = TRUE, 
+                   col.ind = "black", 
+                   invisible="quali",
+                   legend.title = "Batch",
+                   palette = c("royalblue3","yellow2"))
+g1 +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),  # Remove major gridlines
+        panel.grid.minor = element_blank(),   # Remove minor gridlines
+        aspect.ratio=1
+       )
+#dev.off()
+```
+
+```{r Averaging Overlapping Data}
+## JNK, ErkMap, and p38 are duplicated in readings from the separate kits
+# Averaging columns, renaming, and removing the originals
+# For JNK
+pathway_dat <- pathway_dat %>%
+  mutate(JNK = (.[[3]] + .[[12]]) / 2)
+# For ErkMAPK1.2
+pathway_dat <- pathway_dat %>%
+  mutate(ErkMAPK = (.[[6]] + .[[15]]) / 2)
+# For p38
+pathway_dat <- pathway_dat %>%
+  mutate(p38 = (.[[5]] + .[[14]]) / 2)
+
+# Remove the columns used when averaging
+pathway_dat <- pathway_dat %>% dplyr::select(-c(JNK_1, JNK_2, ERK12_1, Erk.MAP.Kinase.1.2_2, p38_1, P38_2))
+
+# Renaming the columns without the batch labeling
+colnames(pathway_dat)[2] <- "CREB"
+colnames(pathway_dat)[3] <- "NFkB"
+colnames(pathway_dat)[4] <- "Akt"
+colnames(pathway_dat)[5] <- "p70S6K"
+colnames(pathway_dat)[6] <- "STAT3"
+colnames(pathway_dat)[7] <- "STAT5"
+colnames(pathway_dat)[8] <- "ATF2"
+colnames(pathway_dat)[9] <- "HSP27"
+colnames(pathway_dat)[10] <- "p53"
+colnames(pathway_dat)[11] <- "MEK1"
+colnames(pathway_dat)[12] <- "MSK1"
+colnames(pathway_dat)[13] <- "STAT1"
+colnames(pathway_dat)[14] <- "cJun"
+```
+
+## 2. HIERARCHICAL CLUSTERING ANALYSIS
+```{r Generating the Heat Map for Mean Metabolite Values, fig.height=4.5, fig.width=5}
+# Create a placement variable for the matrix
+pathway_dat_m <- pathway_dat
+# Create a variable to hold the row names
+pathway_dat_rowname <- pathway_dat_m$Sample
+# Remove the "Sample" column to move as a row name
+pathway_dat_matrix <- pathway_dat_m[c(2:ncol(pathway_dat_m))]
+# Replace the current row name with the "Sample" of the metabolites
+rownames(pathway_dat_matrix) <- pathway_dat_rowname 
+
+# Creating different groups for the metabolites to reorganize order based on the associations with T2D and AD
+pathway_matrix_AAA <- pathway_dat_matrix[1:3,]
+pathway_matrix_AA <- pathway_dat_matrix[4:6,]
+pathway_matrix_Asp <- pathway_dat_matrix[7:9,]
+pathway_matrix_DS <- pathway_dat_matrix[10:12,]
+pathway_matrix_F <- pathway_dat_matrix[13:15,]
+pathway_matrix_LT <- pathway_dat_matrix[16:18,]
+pathway_matrix_LA <- pathway_dat_matrix[19:21,]
+pathway_matrix_N <- pathway_dat_matrix[22:24,]
+pathway_matrix_R <- pathway_dat_matrix[25:27,]
+
+# Bind the groups of metabolites by respective associations with T2D and AD
+# AD protective: LT, N;    T2D: LA, Asp;    AD/T2D protective: R;     AD/T2D: AAA, AA, DS, F
+pathway_avg_matrix <- rbind(pathway_matrix_LT, pathway_matrix_N, pathway_matrix_LA, pathway_matrix_Asp, pathway_matrix_R, pathway_matrix_AAA, pathway_matrix_AA, pathway_matrix_DS, pathway_matrix_F)
+# Make the data frame a matrix
+pathway_avg_matrix <- as.matrix(pathway_avg_matrix)
+# Z-score the log2FC values
+pathway_avg_matrix <- scale(pathway_avg_matrix, center = TRUE, scale = TRUE)
+
+# Generate the heat map
+#svg('mheatmap.svg', width = 8, height = 6)
+heatmapfig <- pheatmap(pathway_avg_matrix,
+  cluster_rows = F,
+  cluster_cols = T,
+  color = colorRampPalette(c("blue", "white", "red"))(10000),
+  border_color = "black",
+  breaks = seq(-4, 4, length.out = 10000),
+  angle_col = 45,
+  fontsize_col = 9,
+  fontsize_row = 5,
+  cellwidth=10)
+#dev.off()
+```
+
+A Kruskal-Wallis (KW) test was used for different disease-associations for each metabolite. The Benjamini-Hochberg adjusted p-values for each Pathway across the different disease-association is recorded and used for the heatmap. 
+
+```{r Kruskal-Wallis Test}
+# Perform Kruskal-Wallis tests and store p-values in a vector
+
+# Create a KW-defined data frame
+pathway_condition_KW <- pathway_dat_matrix
+# Insert new column for the conditions
+pathway_condition_KW <- cbind(Condition = NA, pathway_condition_KW)
+
+# Renaming the metabolite names to respective condition group
+# AD protective: LT, N;    T2D: LA, Asp;    AD/T2D protective: R;     AD/T2D: AAA, AA, DS, F
+pathway_condition_KW[c(1:3),1] <- "AD & T2D"
+pathway_condition_KW[c(4:6),1] <- "AD & T2D"
+pathway_condition_KW[c(7:9),1] <- "T2D"
+pathway_condition_KW[c(10:12),1] <- "AD & T2D"
+pathway_condition_KW[c(13:15),1] <- "AD & T2D"
+pathway_condition_KW[c(16:18),1] <- "AD Protective"
+pathway_condition_KW[c(19:21),1] <- "T2D"
+pathway_condition_KW[c(22:24),1] <- "AD Protective"
+pathway_condition_KW[c(25:27),1] <- "AD & T2D Protective"
+
+pathway_condition_KW <- as.data.frame(pathway_condition_KW)
+
+p_values <- c()
+for (i in 2:ncol(pathway_condition_KW)) {
+  kwTest2 <- kruskal.test(pathway_condition_KW[,i], pathway_condition_KW$Condition)
+  p_values <- c(p_values, kwTest2$p.value)
+}
+
+# Perform Benjamini-Hochberg correction
+adjusted_p_values <- p.adjust(p_values, method = "BH")
+
+# Combine the original p-values and adjusted p-values into a data frame
+p_value_df <- data.frame(OriginalPValue = p_values, AdjustedPValue = adjusted_p_values)
+
+# Renaming the Pathway column
+p_value_df[1,3] <- "CREB"
+p_value_df[2,3] <- "NFkB"
+p_value_df[3,3] <- "Akt"
+p_value_df[4,3] <- "p70S6K"
+p_value_df[5,3] <- "STAT3"
+p_value_df[6,3] <- "STAT5"
+p_value_df[7,3] <- "ATF2"
+p_value_df[8,3] <- "HSP27"
+p_value_df[9,3] <- "p53"
+p_value_df[10,3] <- "MEK1"
+p_value_df[11,3] <- "MSK1"
+p_value_df[12,3] <- "STAT1"
+p_value_df[13,3] <- "cJun"
+p_value_df[14,3] <- "JNK"
+p_value_df[15,3] <- "ErkMAPK"
+p_value_df[16,3] <- "p38"
+
+# Rename the columns
+colnames(p_value_df)[1] <- "p-value"
+colnames(p_value_df)[2] <- "BH p-value"
+colnames(p_value_df)[3] <- "Pathway"
+
+# Reset the row count number
+rownames(p_value_df) <- NULL
+# Make the p-value column numeric
+p_value_df$`p-value` <- as.numeric(p_value_df$`p-value`)
+p_value_df$`BH p-value` <- as.numeric(p_value_df$`BH p-value`)
+# Prepare a method to color code the graph based on p-value greater or less than 0.05
+p_value_df <- p_value_df %>%
+  mutate(sign = `BH p-value` <= 0.10)
+
+# Adjust the positions on the bar chart to display values from the respective groups
+positions <- c("STAT5", "MEK1", "p70S6K", "STAT1", "JNK", "ATF2", "Akt", "STAT3", "NFkB", "cJun", "ErkMAPK", "CREB", "MSK1", "p53", "p38", "HSP27")
+
+# Plot the KW BH corrected p-value results
+ggplot(p_value_df) +
+  geom_col(aes(x = `BH p-value`, y = Pathway, fill=sign), colour = "black", width = 1) +
+  ylab(NULL) + xlab("q-value (color cuttoff at FDR q-value < 0.10)") + theme_minimal() + 
+  theme(legend.position = "none", text=element_text(color="black", size = 10), 
+        axis.text = element_text(color = "black", size=10)) + 
+  xlim(c(0,0.95)) + scale_y_discrete(limits = positions)
+```
+
+## 3. MANN-WHITNEY STATISTICAL COMPARISON
+### 3.1. Pairwise Box-Whisker Plots
+A box-and-whisker plots for each of the individual Pathways are generated here. 
+```{r Box-and-Whisker Plots for the Pathways}
+# Pull in log2FC data for the box plots
+pathway_boxwhisk_avg <- pathway_dat
+# Remove the (number) in column such that only metabolite names are remaining
+pathway_boxwhisk_avg$Sample <- gsub(" \\(\\d+\\)", "", pathway_boxwhisk_avg$Sample)
+# Reorder the groups of metabolites by respective associations with T2D and AD
+# AD protective: LT, N;    T2D: LA, Asp;    AD/T2D protective: R;     AD/T2D: AAA, AA, DS, F
+pathway_boxwhisk_avg$Sample <- factor(pathway_boxwhisk_avg$Sample,     # Reorder factor levels
+                         levels=c("L-Tryptophan", "Niacinamide", "Lauric Acid", "Asparagine", "Retinol", "Aminoadipic Acid", "Arachidonic Acid", "D-Sorbitol", "Fructose"))
+
+# Box and Whisker Plots - STAT5
+#svg('MW_STAT5.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = STAT5, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(STAT5/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - Akt
+#svg('MW_Akt.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = Akt, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(Akt/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - JNK
+#svg('MW_JNK.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = JNK, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-3.5, 3.5) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(JNK/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - STAT1
+#svg('MW_STAT1.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = STAT1, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-6, 6) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(STAT1/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - p70S6K
+#svg('MW_p70S6K.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = p70S6K, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(p70S6K/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - MEK1
+#svg('MW_MEK1.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = MEK1, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-3, 3) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(MEK1/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - ATF2
+#svg('MW_ATF2.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = ATF2, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(ATF2/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+```
+
+### 3.2. P-value calculations
+```{r Mann-Whitney Calculation for p-values}
+# Rename a new variable for the Mann-Whitney statistical analysis
+pathway_MW_dat <- pathway_condition_KW
+# For loop to make all columns within the pathway_MW_dat data frame numeric, except for the first column
+for (i in 2:ncol(pathway_MW_dat)) {
+  pathway_MW_dat[,i] <- as.numeric(pathway_MW_dat[,i])
+}
+
+# Establishing four different groups based on disease association for the Mann-Whitney tests
+# First establish a group with T2D-associated names only
+MW_dat_AD_T2D <- pathway_MW_dat[grepl("T2D", pathway_MW_dat$Condition),]
+# Remove the AD affiliated groups to get T2D-only group
+MW_dat_T2D <- MW_dat_AD_T2D[!grepl("AD", MW_dat_AD_T2D$Condition),]
+# Get the AD protective group by searching for AD protective
+MW_dat_ADprotect <- pathway_MW_dat[grepl("AD Protective", pathway_MW_dat$Condition),]
+# Get the AD-T2D protective by taking the the first group and taking protective
+MW_dat_AD_T2Dprotect <- MW_dat_AD_T2D[grepl("Protective", MW_dat_AD_T2D$Condition),]
+# Remove the protective association from the AD-T2D harmful group
+MW_dat_AD_T2D <- MW_dat_AD_T2D[!grepl("Protective", MW_dat_AD_T2D$Condition),]
+# Get the AD association to keep the AD-T2D harmful group
+MW_dat_AD_T2D <- MW_dat_AD_T2D[grepl("AD", MW_dat_AD_T2D$Condition),]
+
+# Calculate p-values for each separate Pathway 
+# A. STAT5 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$STAT5, MW_dat_T2D$STAT5, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$STAT5, MW_dat_ADprotect$STAT5, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$STAT5, MW_dat_AD_T2Dprotect$STAT5, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$STAT5, MW_dat_ADprotect$STAT5, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$STAT5, MW_dat_AD_T2Dprotect$STAT5, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$STAT5, MW_dat_AD_T2Dprotect$STAT5,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+STAT5 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for STAT5
+STAT5_MW <- data.frame(Pairwise, STAT5)
+
+# B. Akt Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$Akt, MW_dat_T2D$Akt, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$Akt, MW_dat_ADprotect$Akt, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$Akt, MW_dat_AD_T2Dprotect$Akt, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$Akt, MW_dat_ADprotect$Akt, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$Akt, MW_dat_AD_T2Dprotect$Akt, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$Akt, MW_dat_AD_T2Dprotect$Akt,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+Akt <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for Akt
+Akt_MW <- data.frame(Pairwise, Akt)
+
+# C. STAT3 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$STAT3, MW_dat_T2D$STAT3, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$STAT3, MW_dat_ADprotect$STAT3, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$STAT3, MW_dat_AD_T2Dprotect$STAT3, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$STAT3, MW_dat_ADprotect$STAT3, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$STAT3, MW_dat_AD_T2Dprotect$STAT3, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$STAT3, MW_dat_AD_T2Dprotect$STAT3,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+STAT3 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for STAT3
+STAT3_MW <- data.frame(Pairwise, STAT3)
+
+# D. JNK Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$JNK, MW_dat_T2D$JNK, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$JNK, MW_dat_ADprotect$JNK, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$JNK, MW_dat_AD_T2Dprotect$JNK, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$JNK, MW_dat_ADprotect$JNK, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$JNK, MW_dat_AD_T2Dprotect$JNK, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$JNK, MW_dat_AD_T2Dprotect$JNK,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+JNK <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for JNK
+JNK_MW <- data.frame(Pairwise, JNK)
+
+# E. NFkB Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$NFkB, MW_dat_T2D$NFkB, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$NFkB, MW_dat_ADprotect$NFkB, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$NFkB, MW_dat_AD_T2Dprotect$NFkB, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$NFkB, MW_dat_ADprotect$NFkB, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$NFkB, MW_dat_AD_T2Dprotect$NFkB, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$NFkB, MW_dat_AD_T2Dprotect$NFkB,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+NFkB <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for NFkB
+NFkB_MW <- data.frame(Pairwise, NFkB)
+
+# F. p38 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$p38, MW_dat_T2D$p38, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$p38, MW_dat_ADprotect$p38, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$p38, MW_dat_AD_T2Dprotect$p38, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$p38, MW_dat_ADprotect$p38, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$p38, MW_dat_AD_T2Dprotect$p38, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$p38, MW_dat_AD_T2Dprotect$p38,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+p38 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for p38
+p38_MW <- data.frame(Pairwise, p38)
+
+# G. HSP27 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$HSP27, MW_dat_T2D$HSP27, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$HSP27, MW_dat_ADprotect$HSP27, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$HSP27, MW_dat_AD_T2Dprotect$HSP27, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$HSP27, MW_dat_ADprotect$HSP27, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$HSP27, MW_dat_AD_T2Dprotect$HSP27, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$HSP27, MW_dat_AD_T2Dprotect$HSP27,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+HSP27 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for HSP27
+HSP27_MW <- data.frame(Pairwise, HSP27)
+
+# H. STAT1 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$STAT1, MW_dat_T2D$STAT1, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$STAT1, MW_dat_ADprotect$STAT1, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$STAT1, MW_dat_AD_T2Dprotect$STAT1, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$STAT1, MW_dat_ADprotect$STAT1, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$STAT1, MW_dat_AD_T2Dprotect$STAT1, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$STAT1, MW_dat_AD_T2Dprotect$STAT1,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+STAT1 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for STAT1
+STAT1_MW <- data.frame(Pairwise, STAT1)
+
+# I. p70S6K Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$p70S6K, MW_dat_T2D$p70S6K, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$p70S6K, MW_dat_ADprotect$p70S6K, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$p70S6K, MW_dat_AD_T2Dprotect$p70S6K, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$p70S6K, MW_dat_ADprotect$p70S6K, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$p70S6K, MW_dat_AD_T2Dprotect$p70S6K, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$p70S6K, MW_dat_AD_T2Dprotect$p70S6K,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+p70S6K <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for p70S6K
+p70S6K_MW <- data.frame(Pairwise, p70S6K)
+
+# J. CREB Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$CREB, MW_dat_T2D$CREB, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$CREB, MW_dat_ADprotect$CREB, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$CREB, MW_dat_AD_T2Dprotect$CREB, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$CREB, MW_dat_ADprotect$CREB, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$CREB, MW_dat_AD_T2Dprotect$CREB, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$CREB, MW_dat_AD_T2Dprotect$CREB,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+CREB <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for CREB
+CREB_MW <- data.frame(Pairwise, CREB)
+
+# K. ErkMAPK Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$ErkMAPK, MW_dat_T2D$ErkMAPK, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$ErkMAPK, MW_dat_ADprotect$ErkMAPK, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$ErkMAPK, MW_dat_AD_T2Dprotect$ErkMAPK, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$ErkMAPK, MW_dat_ADprotect$ErkMAPK, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$ErkMAPK, MW_dat_AD_T2Dprotect$ErkMAPK, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$ErkMAPK, MW_dat_AD_T2Dprotect$ErkMAPK,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+ErkMAPK <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for ErkMAPK
+ErkMAPK_MW <- data.frame(Pairwise, ErkMAPK)
+
+# L. MSK1 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$MSK1, MW_dat_T2D$MSK1, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$MSK1, MW_dat_ADprotect$MSK1, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$MSK1, MW_dat_AD_T2Dprotect$MSK1, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$MSK1, MW_dat_ADprotect$MSK1, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$MSK1, MW_dat_AD_T2Dprotect$MSK1, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$MSK1, MW_dat_AD_T2Dprotect$MSK1,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+MSK1 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for MSK1
+MSK1_MW <- data.frame(Pairwise, MSK1)
+
+# M. MEK1 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$MEK1, MW_dat_T2D$MEK1, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$MEK1, MW_dat_ADprotect$MEK1, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$MEK1, MW_dat_AD_T2Dprotect$MEK1, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$MEK1, MW_dat_ADprotect$MEK1, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$MEK1, MW_dat_AD_T2Dprotect$MEK1, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$MEK1, MW_dat_AD_T2Dprotect$MEK1,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+MEK1 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for MEK1
+MEK1_MW <- data.frame(Pairwise, MEK1)
+
+# N. ATF2 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$ATF2, MW_dat_T2D$ATF2, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$ATF2, MW_dat_ADprotect$ATF2, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$ATF2, MW_dat_AD_T2Dprotect$ATF2, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$ATF2, MW_dat_ADprotect$ATF2, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$ATF2, MW_dat_AD_T2Dprotect$ATF2, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$ATF2, MW_dat_AD_T2Dprotect$ATF2,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+ATF2 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for ATF2
+ATF2_MW <- data.frame(Pairwise, ATF2)
+
+# O. cJun Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$cJun, MW_dat_T2D$cJun, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$cJun, MW_dat_ADprotect$cJun, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$cJun, MW_dat_AD_T2Dprotect$cJun, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$cJun, MW_dat_ADprotect$cJun, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$cJun, MW_dat_AD_T2Dprotect$cJun, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$cJun, MW_dat_AD_T2Dprotect$cJun,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+cJun <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for cJun
+cJun_MW <- data.frame(Pairwise, cJun)
+
+# P. p53 Pathway Mann Whitney Comparison
+# AD-T2D harmful vs T2D harmful
+AD_T2DvsT2D <- wilcox.test(MW_dat_AD_T2D$p53, MW_dat_T2D$p53, alternative = "two.sided")
+# AD-T2D harmful vs AD protective
+AD_T2DvsADprotect <- wilcox.test(MW_dat_AD_T2D$p53, MW_dat_ADprotect$p53, alternative = "two.sided")
+# AD-T2D harmful vs AD-T2D protective
+AD_T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_AD_T2D$p53, MW_dat_AD_T2Dprotect$p53, alternative = "two.sided")
+# T2D harmful vs AD protective
+T2DvsADprotect <- wilcox.test(MW_dat_T2D$p53, MW_dat_ADprotect$p53, alternative = "two.sided")
+# T2D harmful vs AD-T2D protective
+T2DvsAD_T2Dprotect <- wilcox.test(MW_dat_T2D$p53, MW_dat_AD_T2Dprotect$p53, alternative = "two.sided")
+# AD Protective vs AD-T2D protective
+ADprotectvsAD_T2Dprotect <- wilcox.test(MW_dat_ADprotect$p53, MW_dat_AD_T2Dprotect$p53,alternative = "two.sided")
+# Create a list for the disease-associated pair relationships 
+Pairwise <- c("AD-T2D vs T2D", "AD-T2D vs AD protective", "AD-T2D vs AD-T2D protective", "T2D vs AD protective", "T2D vs AD-T2D protective", "AD protective vs AD-T2D protective")
+# Prepare the pvalues in a list
+p53 <- c(AD_T2DvsT2D$p.value, AD_T2DvsADprotect$p.value, AD_T2DvsAD_T2Dprotect$p.value, T2DvsADprotect$p.value, T2DvsAD_T2Dprotect$p.value, ADprotectvsAD_T2Dprotect$p.value)
+# Generate Data frame for the MW test for p53
+p53_MW <- data.frame(Pairwise, p53)
+
+# Combine the p-values from Mann-Whitney into one data frame
+Pathway_MW <- data.frame(Pairwise, STAT5_MW$STAT5, Akt_MW$Akt, STAT3_MW$STAT3, JNK_MW$JNK,
+                         NFkB_MW$NFkB, p38_MW$p38, HSP27_MW$HSP27, STAT1_MW$STAT1, 
+                         p70S6K_MW$p70S6K, CREB_MW$CREB, ErkMAPK_MW$ErkMAPK, MSK1_MW$MSK1,
+                         MEK1_MW$MEK1, ATF2_MW$ATF2, cJun_MW$cJun, p53_MW$p53)
+# Rename column names
+colnames(Pathway_MW)[2] <- "STAT5"
+colnames(Pathway_MW)[3] <- "Akt"
+colnames(Pathway_MW)[4] <- "STAT3"
+colnames(Pathway_MW)[5] <- "JNK"
+colnames(Pathway_MW)[6] <- "NFkB"
+colnames(Pathway_MW)[7] <- "p38"
+colnames(Pathway_MW)[8] <- "HSP27"
+colnames(Pathway_MW)[9] <- "STAT1"
+colnames(Pathway_MW)[10] <- "p70S6K"
+colnames(Pathway_MW)[11] <- "CREB"
+colnames(Pathway_MW)[12] <- "ErkMAPK"
+colnames(Pathway_MW)[13] <- "MSK1"
+colnames(Pathway_MW)[14] <- "MEK1"
+colnames(Pathway_MW)[15] <- "ATF2"
+colnames(Pathway_MW)[16] <- "cJun"
+colnames(Pathway_MW)[17] <- "p53"
+```
+
+## 4. PARTIAL LEAST SQUARES DISCRIMINANT ANALYSIS (PLS-DA)
+PLS-DA model using a four-way analysis among the different disease-associated metabolites.
+
+### 4.1. PLS-DA for 4-Way Comparison Based on Disease-Association
+```{r Prepare the Data for a 4-Way PLS-DA Comparison}
+# Rename a new variable for the plsda data set
+pathway_plsda_dat <- pathway_condition_KW
+# Factorize the conditions based on the four different disease-association groups
+pathway_plsda_dat$Condition <- factor(pathway_plsda_dat$Condition)
+
+for (i in 2:ncol(pathway_plsda_dat)) {
+  pathway_plsda_dat[,i] <- as.numeric(pathway_plsda_dat[,i])
+}
+
+## Cross Validation to Determine the Number of Components
+# Separate data into the specific categories (Y, disease association) and (X, dataset from Pathways)
+Y <- as.character(pathway_plsda_dat$Condition)
+X <- pathway_plsda_dat[2:ncol(pathway_plsda_dat)]
+# Compute PLSDA for 9 components (noted as plsda_draft for multiple components)
+plsda_draft <- plsda(X, Y, ncomp = 10)
+# Perform a 3-fold cross-validation repeated 10 times to evaluate classification performance
+# Noted as plsda_cv for the cross-validation analysis
+plsda_cv <- perf(plsda_draft, validation = 'Mfold', folds = 3, 
+                  progressBar = FALSE,  # Set to TRUE to track progress
+                  nrepeat = 100)
+# Plot the balanced error rate (BER) and the overall error
+plot(plsda_cv, sd = TRUE, legend.position = 'horizontal')
+# A four-way PLS-DA was performed with 2 components
+plsda_4way <- plsda(X, Y, ncomp = 2)
+
+# Extract the scores for the PLS-DA
+scores_4way <- plsda_4way$variates$X  # PLS scores for X
+plsda_4way_scores <- data.frame(scores_4way, Condition = plsda_4way$Y, Metabolite = rownames(scores_4way))
+plsda_4way_scores$Metabolite <- gsub("\\(\\d+\\)", "", as.character(plsda_4way_scores$Metabolite))
+
+#svg('PLSDA_4way_condition.svg', width = 4, height = 4)
+# PLS-DA plot on 4-way condition
+ggplot(plsda_4way_scores, aes(x = comp1, y = comp2, color = Condition)) +
+  geom_point(size = 2, shape = 16) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  scale_color_manual(values = c("hotpink", "darkslategray3", "royalblue3", "orange")) +
+  labs(
+    title = "",
+    x = "Scores on LV1",
+    y = "Scores on LV2",
+    color = "Condition"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank(),   # Remove minor gridlines
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8),
+    aspect.ratio = 1
+  )
+#dev.off()
+
+#svg('PLSDA_4way_metabolite.svg', width = 4, height = 4)
+# PLS-DA plot on 4-way condition on metabolites
+ggplot(plsda_4way_scores, aes(x = comp1, y = comp2, color = Metabolite)) +
+  geom_point(size = 2, shape = 16) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  scale_color_manual(values = c("#8c1714", "#db3029", "#f0713f","#ffbb79", "#efe98e", "#aadaed", "#75aecf", "#4a74b0", "#272e77")) +
+  labs(
+    title = "",
+    x = "Scores on LV1",
+    y = "Scores on LV2",
+    color = "Metabolite"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank(),   # Remove minor gridlines
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8),
+    aspect.ratio = 1
+  )
+#dev.off()
+```
+
+Identify the loadings for latent variable 1 and 2. Determine the variable importance in projection for the latent variables 1 and 2.
+
+```{r Loading Variables and VIP Determination}
+## Determine the Variable Importance in Projections for the Loadings
+# Determine the VIP values for PLSDA-4way
+plsda_4way.vip <- vip(plsda_4way)
+
+barplot(plsda_4way.vip,
+        beside = TRUE, col = c("red", "orange", "yellow", "darkgreen", "lightblue", "purple", "violet", "brown", "pink", "black", "white", "gray", "blue", "light green", "lightcyan"),
+        ylim = c(0, 2.0), legend = rownames(plsda_4way.vip),
+        main = "Variable Importance in the Projection", font.main = 4)
+
+abline(h=1, lty="dotted", col="black", lwd=5)
+
+## Latent Variable 1 Loadings
+# Pull the loadings information
+loadings4way <- as.data.frame(plsda_4way[["loadings"]][["X"]])
+# Capture the rowname list
+rowname4way <- rownames(loadings4way)
+# Remove the old dataframe's row name
+rownames(loadings4way) <- NULL
+# Merge the row name (as a first column) with the other loadings
+loadings4way <- cbind(rowname4way, loadings4way)
+# Rename the first column to Pathway
+colnames(loadings4way)[1] <- "Pathway"
+
+# Specify the desired words in the desired order
+selected_words <- c("ErkMAPK", "p53", "HSP27", "p38", "p70S6K", "CREB", "ATF2", "MSK1", "STAT1", "MEK1", "cJun", "STAT3", "NFkB", "JNK", "STAT5", "Akt")
+
+# Rearrange the rows based on selected words
+loadings4way <- loadings4way[match(selected_words, loadings4way$Pathway, nomatch = 0), ]
+rownames(loadings4way) <- NULL
+
+# Preparing factor to establish the barplot positioning in the figure across all groups
+loadings4way$Pathway <- factor(loadings4way$Pathway,
+                  levels = c("Akt", "STAT5", "JNK", "NFkB", "STAT3", "cJun", "MEK1", "STAT1", "MSK1", "ATF2", "CREB", "p70S6K", "p38", "HSP27", "p53", "ErkMAPK"))
+
+# Plot loadings with each variable identified with highest contribution to a specific class
+plotLoadings(plsda_4way, comp = 1, method = 'mean', contrib = 'max', border = "black", xlim = c(-0.3,0.55))
+# Plot of loadings color adjusted with fixed Pathway list
+#svg('LV1_4way_condition.svg', width = 4, height = 4)
+loadings4way %>%
+        ggplot(aes(x = Pathway, y = comp1, fill = Pathway)) +
+            geom_bar(stat = "identity", color="black", show.legend = FALSE, width = 1) +
+            scale_fill_manual(values = c("hotpink", "hotpink", "orange", "royalblue3", "hotpink", "darkslategray3", "darkslategray3", "darkslategray3", "royalblue3", "royalblue3", "hotpink","darkslategray3", "darkslategray3", "orange", "orange", "orange")) + 
+            coord_flip() + theme_classic() + labs(x=NULL, y="Loadings on LV1") +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank()   # Remove minor gridlines
+  )
+#dev.off()
+
+## Latent Variable 2 Loadings
+# Pull the loadings information
+loadings4way <- as.data.frame(plsda_4way[["loadings"]][["X"]])
+# Capture the rowname list
+rowname4way <- rownames(loadings4way)
+# Remove the old dataframe's row name
+rownames(loadings4way) <- NULL
+# Merge the row name (as a first column) with the other loadings
+loadings4way <- cbind(rowname4way, loadings4way)
+# Rename the first column to Pathway
+colnames(loadings4way)[1] <- "Pathway"
+
+# Specify the desired words in the desired order
+selected_words <- c("cJun", "HSP27", "Akt", "MSK1", "NFkB", "p38", "CREB", "STAT3", "p53", "JNK", "MEK1", "ATF2", "STAT5", "p70S6K", "STAT1", "ErkMAPK")
+
+# Rearrange the rows based on selected words
+loadings4way <- loadings4way[match(selected_words, loadings4way$Pathway, nomatch = 0), ]
+rownames(loadings4way) <- NULL
+
+# Preparing factor to establish the barplot positioning in the figure across all groups
+loadings4way$Pathway <- factor(loadings4way$Pathway,
+                  levels = c("ErkMAPK", "STAT1", "p70S6K", "STAT5", "ATF2", "MEK1", "JNK", "p53", "STAT3", "CREB", "p38", "NFkB", "MSK1", "Akt", "HSP27", "cJun"))
+
+# Plot loadings with each variable identified with highest contribution to a specific class
+plotLoadings(plsda_4way, comp = 2, method = 'mean', contrib = 'max')
+# Plot of loadings color adjusted with fixed Pathway list
+#svg('LV2_4way_condition.svg', width = 4, height = 4)
+loadings4way %>%
+        ggplot(aes(x = Pathway, y = comp2, fill = Pathway)) +
+            geom_bar(stat = "identity", color="black", show.legend = FALSE, width = 1) +
+            scale_fill_manual(values = c("orange", "darkslategray3", "darkslategray3", "hotpink", "royalblue3", "darkslategray3", "orange", "orange", "hotpink", "hotpink", "darkslategray3", "royalblue3", "royalblue3", "hotpink", "orange", "darkslategray3")) + 
+            coord_flip() + theme_classic() + labs(x=NULL, y="Loadings on LV2") +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank()  ,# Remove minor gridlines
+  )
+#dev.off()
+```
+
+### 4.2. PLS-DA for 2-Way Comparison Based on AD Harmful vs. AD Protective
+Prepare a similar PLS-DA model, including only the metabolites and data associated with AD.
+
+```{r Prepare the Data for a 2-Way AD PLS-DA Comparison, fig.height=4.2, fig.width=5}
+# Rename a new variable for the plsda data set
+pathway_plsda_dat_AD <- pathway_condition_KW
+
+# Adjust disease-association on AD protective or harmful, regardless of T2D status
+pathway_plsda_dat_AD[c(1:3),1] <- "AD"
+pathway_plsda_dat_AD[c(4:6),1] <- "AD"
+pathway_plsda_dat_AD[c(7:9),1] <- "T2D"
+pathway_plsda_dat_AD[c(10:12),1] <- "AD"
+pathway_plsda_dat_AD[c(13:15),1] <- "AD"
+pathway_plsda_dat_AD[c(16:18),1] <- "AD Protective"
+pathway_plsda_dat_AD[c(19:21),1] <- "T2D"
+pathway_plsda_dat_AD[c(22:24),1] <- "AD Protective"
+pathway_plsda_dat_AD[c(25:27),1] <- "AD Protective"
+
+# Select only the categories associated with AD, and NOT T2D
+pathway_plsda_dat_AD <- pathway_plsda_dat_AD[grepl("AD", pathway_plsda_dat_AD$Condition),]
+
+# Factorize the conditions based on association to AD protective or harmful, regardless of T2D affiliation
+pathway_plsda_dat_AD$Condition <- factor(pathway_plsda_dat_AD$Condition)
+
+for (i in 2:ncol(pathway_plsda_dat_AD)) {
+  pathway_plsda_dat_AD[,i] <- as.numeric(pathway_plsda_dat_AD[,i])
+}
+
+## Cross Validation to determine the number of components for the model
+# Separate data into the specific categories (Y, disease association) and (X, dataset from Pathways)
+Y_AD <- as.character(pathway_plsda_dat_AD$Condition)
+X_AD <- pathway_plsda_dat_AD[2:ncol(pathway_plsda_dat_AD)]
+
+# Compute PLSDA for 10 components (noted as plsda_draft for multiple components)
+plsda_draft_AD <- plsda(X_AD, Y_AD, ncomp = 10)
+
+# Perform a 3-fold cross-validation repeated 10 times to evaluate classification performance
+# Noted as plsda_cv for the cross-validation analysis
+plsda_cv_AD <- perf(plsda_draft_AD, validation = 'Mfold', folds = 3, 
+                  progressBar = FALSE,  # Set to TRUE to track progress
+                  nrepeat = 100)
+# Plot the balanced error rate (BER) and the overall error
+plot(plsda_cv_AD, sd = TRUE, legend.position = 'horizontal')
+
+## Plot the PLS-DA Model
+# Code below is to save the figure as an EPS file
+#cairo_ps(filename='plsda_AD_2way.eps', height = 8.2, width = 10)
+
+# A two-way PLS-DA was performed with 2 components
+plsda_AD <- plsda(X_AD, Y_AD, ncomp = 2)
+
+# Extract the scores for the PLS-DA
+scores_AD <- plsda_AD$variates$X  # PLS scores for X
+plsda_AD_scores <- data.frame(scores_AD, Condition = plsda_AD$Y, Metabolite = rownames(scores_AD))
+plsda_AD_scores$Metabolite <- gsub("\\(\\d+\\)", "", as.character(plsda_AD_scores$Metabolite))
+
+#svg('PLSDA_AD_condition.svg', width = 4, height = 4)
+# PLS-DA plot on 4-way condition
+ggplot(plsda_AD_scores, aes(x = comp1, y = comp2, color = Condition)) +
+  geom_point(size = 2, shape = 16) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  scale_color_manual(values = c("red3", "royalblue3")) +
+  labs(
+    title = "",
+    x = "Scores on LV1",
+    y = "Scores on LV2",
+    color = "Condition"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank(),   # Remove minor gridlines
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8),
+    aspect.ratio = 1
+  )
+#dev.off()
+
+#svg('PLSDA_AD_metabolite.svg', width = 4, height = 4)
+# PLS-DA plot on 4-way condition on metabolites
+ggplot(plsda_AD_scores, aes(x = comp1, y = comp2, color = Metabolite)) +
+  geom_point(size = 2, shape = 16) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  scale_color_manual(values = c("#8c1714", "#f0713f","#ffbb79", "#efe98e", "#aadaed", "#4a74b0", "#272e77")) +
+  labs(
+    title = "",
+    x = "Scores on LV1",
+    y = "Scores on LV2",
+    color = "Metabolite"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank(),   # Remove minor gridlines
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8),
+    aspect.ratio = 1
+  )
+#dev.off()
+```
+
+Identify the loadings for latent variable 1 and 2. Determine the variable importance in projection for the latent variables 1 and 2.
+
+```{r Loading Variables and VIP Determination for AD}
+# Determine the VIP values for AD-2way 
+plsda_AD.vip <- vip(plsda_AD)
+
+# Plot the graph for the VIP>1
+barplot(plsda_AD.vip,
+        beside = TRUE, col = c("red", "orange", "yellow", "dark green", "light blue", "purple", "violet", "brown", "pink", "black", "white", "gray", "blue", "light green", "lightcyan"),
+        ylim = c(0, 2.0), legend = rownames(plsda_AD.vip),
+        main = "Variable Importance in the Projection", font.main = 4)
+
+abline(h=1, lty="dotted", col="black", lwd=5)
+
+## Loadings for Latent Variable 1
+# Pull the loadings information
+loadingsAD <- as.data.frame(plsda_AD[["loadings"]][["X"]])
+# Capture the rowname list
+rownameAD <- rownames(loadingsAD)
+# Remove the old dataframe's row name
+rownames(loadingsAD) <- NULL
+# Merge the row name (as a first column) with the other loadings
+loadingsAD <- cbind(rownameAD, loadingsAD)
+# Rename the first column to Pathway
+colnames(loadingsAD)[1] <- "Pathway"
+
+# Specify the desired words in the desired order
+selected_words <- c("NFkB", "JNK", "MSK1", "p53", "p38", "HSP27", "ATF2", "STAT1", "cJun", "CREB", "ErkMAPK", "p70S6K", "STAT3", "Akt", "MEK1", "STAT5")
+
+# Rearrange the rows based on selected words
+loadingsAD <- loadingsAD[match(selected_words, loadingsAD$Pathway, nomatch = 0), ]
+rownames(loadingsAD) <- NULL
+
+# Preparing factor to establish the barplot positioning in the figure across all groups
+loadingsAD$Pathway <- factor(loadingsAD$Pathway,
+                  levels = c("STAT5", "MEK1", "Akt", "STAT3", "p70S6K", "ErkMAPK", "CREB", "cJun", "STAT1", "ATF2", "HSP27", "p38", "p53", "MSK1", "JNK", "NFkB"))
+
+# Plot loadings with each variable identified with highest contribution to a specific class
+plotLoadings(plsda_AD, comp = 1, method = 'mean', contrib = 'max')
+# Plot of loadings color adjusted with fixed Pathway list
+#svg('LV1_AD_condition.svg', width = 4, height = 4)
+loadingsAD %>%
+        ggplot(aes(x = Pathway, y = comp1, fill = Pathway)) +
+            geom_bar(stat = "identity", color="black", show.legend = FALSE, width = 1) +
+            scale_fill_manual(values = c("red3", "royalblue3", "red3", "red3", "red3", "royalblue3", "red3", "royalblue3", "red3", "royalblue3", "red3", "red3", "royalblue3", "royalblue3", "red3", "red3")) + 
+            coord_flip() + theme_classic() + labs(x=NULL, y="Loadings on LV1") +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank()   # Remove minor gridlines
+  )
+#dev.off()
+
+## Loadings for Latent Variable 2
+# Pull the loadings information
+loadingsAD <- as.data.frame(plsda_AD[["loadings"]][["X"]])
+# Capture the rowname list
+rownameAD <- rownames(loadingsAD)
+# Remove the old dataframe's row name
+rownames(loadingsAD) <- NULL
+# Merge the row name (as a first column) with the other loadings
+loadingsAD <- cbind(rownameAD, loadingsAD)
+# Rename the first column to Pathway
+colnames(loadingsAD)[1] <- "Pathway"
+
+# Specify the desired words in the desired order
+selected_words <- c("Akt", "MEK1", "MSK1", "ATF2", "NFkB", "STAT5", "JNK", "CREB", "ErkMAPK", "STAT3", "HSP27", "cJun", "p38", "p53", "STAT1", "p70S6K")
+
+# Rearrange the rows based on selected words
+loadingsAD <- loadingsAD[match(selected_words, loadingsAD$Pathway, nomatch = 0), ]
+rownames(loadingsAD) <- NULL
+
+# Preparing factor to establish the barplot positioning in the figure across all groups
+loadingsAD$Pathway <- factor(loadingsAD$Pathway,
+                  levels = c("p70S6K", "STAT1", "p53", "p38", "cJun", "HSP27", "STAT3", "ErkMAPK", "CREB", "JNK", "STAT5", "NFkB", "ATF2", "MSK1", "MEK1", "Akt"))
+
+# Plot loadings with each variable identified with highest contribution to a specific class
+plotLoadings(plsda_AD, comp = 2, method = 'mean', contrib = 'max')
+
+# Plot of loadings color adjusted with fixed Pathway list
+#svg('LV2_AD_condition.svg', width = 4, height = 4)
+loadingsAD %>%
+        ggplot(aes(x = Pathway, y = comp2, fill = Pathway)) +
+            geom_bar(stat = "identity", color="black", show.legend = FALSE, width = 1) +
+            scale_fill_manual(values = c("red3", "red3", "royalblue3", "red3", "royalblue3", "red3", "red3", "royalblue3", "red3", "red3", "red3", "red3", "royalblue3", "royalblue3", "royalblue3", "red3")) + 
+            coord_flip() + theme_classic() + labs(x=NULL, y="Loadings on LV2") +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank()   # Remove minor gridlines
+  )
+#dev.off()
+```
+
+### 4.3. PLS-DA for 2-Way Comparison Based on T2D Harmful vs. T2D Protective
+Prepare a similar PLS-DA model, including only the metabolites and data associated with T2D.
+
+```{r Prepare the Data for a 2-Way T2D PLS-DA Comparison}
+# Rename a new variable for the plsda data set
+pathway_plsda_dat_T2D <- pathway_condition_KW
+
+# Adjust disease-association on T2D protective or harmful, regardless of T2D status
+pathway_plsda_dat_T2D[c(1:3),1] <- "T2D"
+pathway_plsda_dat_T2D[c(4:6),1] <- "T2D"
+pathway_plsda_dat_T2D[c(7:9),1] <- "T2D"
+pathway_plsda_dat_T2D[c(10:12),1] <- "T2D"
+pathway_plsda_dat_T2D[c(13:15),1] <- "T2D"
+pathway_plsda_dat_T2D[c(16:18),1] <- "AD Protective"
+pathway_plsda_dat_T2D[c(19:21),1] <- "T2D"
+pathway_plsda_dat_T2D[c(22:24),1] <- "AD Protective"
+pathway_plsda_dat_T2D[c(25:27),1] <- "T2D Protective"
+
+# Select only the categories associated with T2D, and NOT T2D
+pathway_plsda_dat_T2D <- pathway_plsda_dat_T2D[grepl("T2D", pathway_plsda_dat_T2D$Condition),]
+
+# Factorize the conditions based on association to T2D protective or harmful, regardless of T2D affiliation
+pathway_plsda_dat_T2D$Condition <- factor(pathway_plsda_dat_T2D$Condition)
+
+for (i in 2:ncol(pathway_plsda_dat_T2D)) {
+  pathway_plsda_dat_T2D[,i] <- as.numeric(pathway_plsda_dat_T2D[,i])
+}
+
+## Cross Validation to determine the number of components for the model
+# Separate data into the specific categories (Y, disease association) and (X, dataset from Pathways)
+Y_T2D <- as.character(pathway_plsda_dat_T2D$Condition)
+X_T2D <- pathway_plsda_dat_T2D[2:ncol(pathway_plsda_dat_T2D)]
+
+# Compute PLSDA for 10 components (noted as plsda_draft for multiple components)
+plsda_draft_T2D <- plsda(X_T2D, Y_T2D, ncomp = 10)
+
+# Perform a 3-fold cross-validation repeated 10 times to evaluate classification performance
+# Noted as plsda_cv for the cross-validation analysis
+plsda_cv_T2D <- perf(plsda_draft_T2D, validation = 'Mfold', folds = 3, 
+                  progressBar = FALSE,  # Set to TRUE to track progress
+                  nrepeat = 100)
+# Plot the balanced error rate (BER) and the overall error
+plot(plsda_cv_T2D, sd = TRUE, legend.position = 'horizontal')
+
+# A two-way T2D PLS-DA was performed with 2 components
+plsda_T2D <- plsda(X_T2D, Y_T2D, ncomp = 2)
+
+# Extract the scores for the PLS-DA
+scores_T2D <- plsda_T2D$variates$X  # PLS scores for X
+plsda_T2D_scores <- data.frame(scores_T2D, Condition = plsda_T2D$Y, Metabolite = rownames(scores_T2D))
+plsda_T2D_scores$Metabolite <- gsub("\\(\\d+\\)", "", as.character(plsda_T2D_scores$Metabolite))
+
+#svg('PLSDA_T2D_condition.svg', width = 4, height = 4)
+# PLS-DA plot on 4-way condition
+ggplot(plsda_T2D_scores, aes(x = comp1, y = comp2, color = Condition)) +
+  geom_point(size = 2, shape = 16) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  scale_color_manual(values = c("plum", "gray60")) +
+  labs(
+    title = "",
+    x = "Scores on LV1",
+    y = "Scores on LV2",
+    color = "Condition"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank(),   # Remove minor gridlines
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8),
+    aspect.ratio = 1
+  )
+#dev.off()
+
+#svg('PLSDA_T2D_metabolite.svg', width = 4, height = 4)
+# PLS-DA plot on 4-way condition on metabolites
+ggplot(plsda_T2D_scores, aes(x = comp1, y = comp2, color = Metabolite)) +
+  geom_point(size = 2, shape = 16) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 0.75) +
+  scale_color_manual(values = c("#8c1714", "#db3029", "#f0713f","#ffbb79", "#efe98e", "#75aecf", "#272e77")) +
+  labs(
+    title = "",
+    x = "Scores on LV1",
+    y = "Scores on LV2",
+    color = "Metabolite"
+  ) +
+  theme_bw() +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank(),   # Remove minor gridlines
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8),
+    aspect.ratio = 1
+  )
+#dev.off()
+```
+
+Identify the loadings for latent variable 1 and 2. Determine the variable importance in projection for the latent variables 1 and 2.
+
+```{r Loading Variables and VIP Determination for T2D,  fig.height=5.2, fig.width=10}
+# Determine the VIP values for PLSDA-4way
+plsda_T2D.vip <- vip(plsda_T2D)
+
+barplot(plsda_T2D.vip,
+        beside = TRUE, col = c("red", "orange", "yellow", "dark green", "light blue", "purple", "violet", "brown", "pink", "black", "white", "gray", "blue", "light green", "lightcyan"),
+        ylim = c(0, 2.0), legend = rownames(plsda_T2D.vip),
+        main = "Variable Importance in the Projection", font.main = 4)
+
+abline(h=1, lty="dotted", col="black", lwd=5)
+
+## Loadings for Latent Variable 1
+# Pull the loadings information
+loadingsT2D <- as.data.frame(plsda_T2D[["loadings"]][["X"]])
+# Capture the rowname list
+rownameT2D <- rownames(loadingsT2D)
+# Remove the old dataframe's row name
+rownames(loadingsT2D) <- NULL
+# Merge the row name (as a first column) with the other loadings
+loadingsT2D <- cbind(rownameT2D, loadingsT2D)
+# Rename the first column to Pathway
+colnames(loadingsT2D)[1] <- "Pathway"
+
+# Specify the desired words in the desired order
+selected_words <- c("ErkMAPK", "p53", "HSP27", "p38", "ATF2", "p70S6K", "MSK1", "CREB", "STAT1", "cJun", "MEK1", "NFkB", "STAT3", "JNK", "STAT5", "Akt")
+
+# Rearrange the rows based on selected words
+loadingsT2D <- loadingsT2D[match(selected_words, loadingsT2D$Pathway, nomatch = 0), ]
+rownames(loadingsT2D) <- NULL
+
+# Preparing factor to establish the barplot positioning in the figure across all groups
+loadingsT2D$Pathway <- factor(loadingsT2D$Pathway,
+                  levels = c("Akt", "STAT5", "JNK", "STAT3", "NFkB", "MEK1", "cJun", "STAT1", "CREB", "MSK1", "p70S6K", "ATF2", "p38", "HSP27", "p53", "ErkMAPK"))
+
+# Plot loadings with each variable identified with highest contribution to a specific class
+plotLoadings(plsda_T2D, comp = 1, method = 'mean', contrib = 'max')
+# Plot of loadings color adjusted with fixed Pathway list
+#svg('LV1_T2D_condition.svg', width = 4, height = 4)
+loadingsT2D %>%
+        ggplot(aes(x = Pathway, y = comp1, fill = Pathway)) +
+            geom_bar(stat = "identity", color="black", show.legend = FALSE, width = 1) +
+            scale_fill_manual(values = c("plum", "plum", "plum", "plum", "plum", "gray60", "gray60", "gray60", "plum", "plum", "gray60", "plum", "gray60", "plum", "plum", "gray60")) + 
+            coord_flip() + theme_classic() + labs(x=NULL, y="Loadings on LV1") +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank()   # Remove minor gridlines
+  )
+#dev.off()
+
+## Loadings for Latent Variable 2
+# Pull the loadings information
+loadingsT2D <- as.data.frame(plsda_T2D[["loadings"]][["X"]])
+# Capture the rowname list
+rownameT2D <- rownames(loadingsT2D)
+# Remove the old dataframe's row name
+rownames(loadingsT2D) <- NULL
+# Merge the row name (as a first column) with the other loadings
+loadingsT2D <- cbind(rownameT2D, loadingsT2D)
+# Rename the first column to Pathway
+colnames(loadingsT2D)[1] <- "Pathway"
+
+# Specify the desired words in the desired order
+selected_words <- c("p70S6K", "STAT5", "MSK1", "STAT1", "ATF2", "JNK", "Akt", "cJun", "NFkB", "STAT3", "CREB", "HSP27", "p53", "p38", "ErkMAPK", "MEK1")
+
+# Rearrange the rows based on selected words
+loadingsT2D <- loadingsT2D[match(selected_words, loadingsT2D$Pathway, nomatch = 0), ]
+rownames(loadingsT2D) <- NULL
+
+# Preparing factor to establish the barplot positioning in the figure across all groups
+loadingsT2D$Pathway <- factor(loadingsT2D$Pathway,
+                  levels = c("MEK1", "ErkMAPK", "p38", "p53", "HSP27", "CREB", "STAT3", "NFkB", "cJun", "Akt", "JNK", "ATF2", "STAT1", "MSK1", "STAT5", "p70S6K"))
+
+# Plot loadings with each variable identified with highest contribution to a specific class
+plotLoadings(plsda_T2D, comp = 2, method = 'mean', contrib = 'max')
+# Plot of loadings color adjusted with fixed Pathway list
+#svg('LV2_T2D_condition.svg', width = 4, height = 4)
+loadingsT2D %>%
+        ggplot(aes(x = Pathway, y = comp2, fill = Pathway)) +
+            geom_bar(stat = "identity", color="black", show.legend = FALSE, width = 1) +
+            scale_fill_manual(values = c("gray60", "gray60", "gray60", "plum", "plum", "plum", "plum", "plum", "gray60", "plum", "plum", "plum", "gray60", "plum", "plum", "gray60")) + 
+            coord_flip() + theme_classic() + labs(x=NULL, y="Loadings on LV2") +
+  theme(
+    panel.grid.major = element_blank(),  # Remove major gridlines
+    panel.grid.minor = element_blank()   # Remove minor gridlines
+  )
+#dev.off()
+```
+
+## 5. CANONICAL CORRELATION ANALYSIS (CCA)
+
+We re-assessed the cytokine dataset to perform CCA with the intracellular dataset.
+```{r CCA Pipeline}
+# Download the processed cytokine data front the 384-well plate
+cytokine_dat <- read.csv("OC_dat_avg.csv")
+colnames(cytokine_dat)[1] <- "Sample"
+
+# Ensure that both datasets are ordered the same way by "Sample"
+pathway_cca <- pathway_dat[order(pathway_dat$Sample), ]
+cytokine_cca <- cytokine_dat[order(cytokine_dat$Sample), ]
+cytokine_cca <- cytokine_cca %>% dplyr::select(Sample, IL9, MCP.1)
+# Save as CSV file
+#write.csv(pathway_cca, "pathway_cca.csv")
+#write.csv(cytokine_cca, "cytokine_cca.csv")
+
+# Move the sample column to the rowname
+Y_cytokine_cca <- column_to_rownames(cytokine_cca, var="Sample")
+X_pathway_cca <- column_to_rownames(pathway_cca, var="Sample")
+
+# Perform Canonical Correlation Analysis
+cca_result <- cc(X_pathway_cca, Y_cytokine_cca)
+# Canonical Correlations
+cca_correlations <- cca_result$cor
+# Plot the results (original package version for visualization)
+plt.cc(cca_result,  var.label = TRUE)
+```
+
+```{r Plot CCA Figures (Higher Quality)}
+# Pull out information from the CCA
+corrXcanloading <- as.data.frame(cca_result$scores$corr.X.xscores)
+corrXcrossloading <- as.data.frame(cca_result$scores$corr.X.yscores)
+corrYcanloading <- as.data.frame(cca_result$scores$corr.Y.yscores)
+corrYcrossloading <- as.data.frame(cca_result$scores$corr.Y.yscores)
+x_score <- as.data.frame(cca_result$scores$xscores)
+y_score <- as.data.frame(cca_result$scores$yscores)
+
+# Plot manuscript-ready figures for aesthetics
+# Plot the X canonical loading only
+corrXYcanloading <- rbind(corrXcanloading, corrYcanloading)
+corrXYcanloading$Label <- c(rep("Protein", 16), rep("Cytokine", 2))
+
+#svg('CCA_protein-cytokine.svg', width = 4, height = 4)
+ggplot(corrXYcanloading, aes(x = V1, y = V2, color = Label, label = rownames(corrXYcanloading))) +
+  geom_point() +
+  scale_color_manual(values = c("Protein" = "blue", "Cytokine" = "red")) +
+  coord_fixed(xlim = c(-1, 1), ylim = c(-1, 1)) +
+  geom_text_repel() +
+  labs(x = "V1", y = "V2", color = "Label") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),  # Remove major gridlines
+        panel.grid.minor = element_blank(),   # Remove minor gridlines
+        aspect.ratio=1
+       )
+#dev.off()
+
+# Plot the x_score as well
+x_score_plot <- x_score
+x_score_plot$Label <- c(rep("AAA", 3), rep("AA", 3), rep("Asp", 3), rep("DS", 3), rep("F6P", 3), rep("LT", 3), rep("LA", 3), rep("N", 3), rep("R", 3))
+
+#svg('CCA_protein-cytokine_metab.svg', width = 4, height = 4)
+ggplot(x_score_plot, aes(x = V1, y = V2, color = Label, label = rownames(x_score_plot))) +
+  geom_point() +
+  scale_color_manual(values = c("AAA" = "#8c1714", "AA" = "#db3029",
+                                "Asp" = "#f0713f", "DS" = "#ffbb79",
+                                "F6P" = "#efe98e", "LT" = "#aadaed",
+                                "LA" = "#75aecf", "N" = "#4a74b0",
+                                "R" = "#272e77")) +
+  coord_fixed(xlim = c(-2.75, 2.75), ylim = c(-2.5, 2.5)) +
+  geom_text_repel(size = 3, max.overlaps = Inf) +  # Reduce text size and allow max overlaps
+  labs(x = "V1", y = "V2", color = "Label") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),  # Remove major gridlines
+        panel.grid.minor = element_blank(),  # Remove minor gridlines
+        aspect.ratio = 1)
+#dev.off()
+```
+
+## 6. SUPPLEMENTARY INFORMATION
+### 6.1. Supplementary Mann-Whitney Box Plots (Insignificant Pathways)
+```{r Box and Whisker Plots}
+# Box and Whisker Plots - ATF2
+#svg('MW_STAT3.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = STAT3, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(STAT3/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+
+# Box and Whisker Plots - NFkB
+#svg('MW_NFkB.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = NFkB, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(NFkB/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - p38
+#svg('MW_p38.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = p38, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(p38/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - HSP27
+#svg('MW_HSP27.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = HSP27, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-4, 8) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(HSP27/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - CREB
+#svg('MW_CREB.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = CREB, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(CREB/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - ErkMAPK
+#svg('MW_ErkMAPK.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = ErkMAPK, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(ErkMAPK/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - MSK1
+#svg('MW_MSK1.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = MSK1, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(MSK1/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - cJun
+#svg('MW_cJun.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = cJun, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(cJun/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+
+# Box and Whisker Plots - p53
+#svg('MW_p53.svg', width = 4, height = 4)
+ggplot(pathway_boxwhisk_avg, aes(x = Sample, y = p53, fill = "grey")) +
+    geom_boxplot() +
+    theme_bw() +
+    theme(aspect.ratio = 1.25,
+          panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    ylim(-2, 2) +
+    geom_jitter(shape = 20, position = position_jitter(0.1), size = 1.5) +
+    xlab("") +
+    ylab(~Log[2]~"(p53/Vehicle Ratio)") +
+    geom_hline(yintercept = 0, linewidth = 0.7, linetype = "dotted") +
+    geom_hline(yintercept = c(-1, 1), size = 0.3, linetype = "dashed")
+#dev.off()
+```
+
+*************** END OF SCRIPT ***************
+
+
+
+
+
